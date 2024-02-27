@@ -1,0 +1,9 @@
+config/boot.scr
+/*.img
+/linux
+/output
+/toolchains
+/u-boot
+/src
+/pkg
+/*.pkg.tar.*

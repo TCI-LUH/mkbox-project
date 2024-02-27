@@ -1,0 +1,27 @@
+stages:
+  - deploy
+  - mkbox
+    
+deploy:
+  stage: deploy
+  only:
+    - main
+  tags: 
+    - tci-boxes
+  script:
+    - '[ -d "root" ] && rsync -rlD "root" "/opt/boxes/$CI_PROJECT_NAME/"'
+    - '[ -d "initramfs" ] && rsync -rlD "initramfs" "/opt/boxes/$CI_PROJECT_NAME/"'
+    - rsync "BOXBUILD"* "/opt/boxes/$CI_PROJECT_NAME/"
+
+mkbox:
+  stage: mkbox
+  only:
+    - main
+  tags: 
+    - tci-boxes
+  variables:
+    BOX_BRANCH: $CI_COMMIT_REF_NAME
+  script:
+    - for board in /opt/boards/*; do sudo -E BOARD="$(basename "$board")" mkbox BOXBUILD; done
+    - mkdir -p /srv/boxes/images/$CI_PROJECT_NAME
+    - cp *.img.* /srv/boxes/images/$CI_PROJECT_NAME

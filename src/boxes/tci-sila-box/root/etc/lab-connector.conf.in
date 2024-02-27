@@ -1,0 +1,2 @@
+DNS_DOMAIN="${LAB_DNS_DOMAIN}" #smartLAB.digilab.tci
+#FORCE_LAB=<base-url-of-the-lab-web-server>

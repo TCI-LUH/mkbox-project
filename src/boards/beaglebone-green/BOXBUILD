@@ -1,0 +1,15 @@
+name="beaglebone-green"
+root_size=40M
+
+arch=armv7
+first_sector=2048
+boot_size=128M
+external_storage_dev="/dev/mmcblk0"
+storage_dev="/dev/mmcblk1"
+
+function flush()
+{
+    dd if="$SRC/MLO" of="$DEV" count=2 seek=1 bs=128k
+    dd if="$SRC/u-boot.img" of="$DEV" seek=1 bs=384k
+    mkimage -A arm -O linux -T script -C none -n "U-Boot boot script" -d "$SRC/../config/boot.txt" "$SRC/../config/boot.scr"
+}

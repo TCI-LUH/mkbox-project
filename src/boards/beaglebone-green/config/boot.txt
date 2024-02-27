@@ -1,0 +1,35 @@
+# After modifying, run ./mkscr
+
+if test -n ${distro_bootpart}; then setenv bootpart ${distro_bootpart}; else setenv bootpart 1; fi
+part uuid ${devtype} ${devnum}:${bootpart} uuid
+
+setenv bootargs "console=tty0 console=${console} bone_capemgr.uboot_capemgr_enabled=1 root=PARTUUID=${uuid} rw rootwait"
+
+if load ${devtype} ${devnum}:${bootpart} ${kernel_addr_r} /zImage; then
+  gpio set 54
+  echo fdt: ${fdtfile}
+  if load ${devtype} ${devnum}:${bootpart} ${fdt_addr_r} /dtbs/${fdtfile}; then
+    
+    fdt addr ${fdt_addr_r}
+	fdt resize
+
+	setenv fdtovaddr 98000000
+	
+	if load ${devtype} ${devnum}:${bootpart} ${fdtovaddr} /overlay.txt && env import -t ${fdtovaddr} ${filesize} && test -n ${overlay}; then
+		echo loaded overlay.txt: ${overlay}
+		for ov in ${overlay}; do
+			echo overlaying ${ov}...
+			load ${devtype} ${devnum}:${bootpart} ${fdtovaddr} /dtbs/overlays/${ov}.dtbo && fdt apply ${fdtovaddr}
+		done
+	fi
+
+    gpio set 55
+    if load ${devtype} ${devnum}:${bootpart} ${ramdisk_addr_r} /initramfs; then
+      gpio set 56
+      bootz ${kernel_addr_r} ${ramdisk_addr_r}:${filesize} ${fdt_addr_r};
+    else
+      gpio set 56
+      bootz ${kernel_addr_r} - ${fdt_addr_r};
+    fi;
+  fi;
+fi

@@ -1,0 +1,55 @@
+## use the docker-box as a base layer
+extend "$BOXES_BASE/docker-box/BOXBUILD"
+
+## set this box name to "tci-sila-box"
+name="tci-sila-box"
+## reserve enouth space for this box layer
+inc_root_size 74M
+
+## define default username and passwords, this variables can be overwitten by the user environment
+TCI_SILA_USER="${TCI_SILA_USER:-user}"
+TCI_SILA_USER_PW="${TCI_SILA_USER_PW:-changeME123}"
+TCI_SILA_DOCKER_PW="${TCI_SILA_DOCKER_PW:-changeME123}"
+
+## specify all needed packages
+apks+=(
+    shadow
+    bind-tools
+    vim
+    sudo
+    bash-completion
+    docker-bash-completion
+    prometheus-node-exporter
+    prometheus-node-exporter-openrc
+)
+
+## the root function is used to copy and create the content of the image root filesystem
+function root()
+{
+    ## create users
+    chroot "$DEST" /usr/sbin/useradd -s /bin/bash -m -p $(openssl passwd -1 "$TCI_SILA_USER_PW") -G wheel "$TCI_SILA_USER"
+    chroot "$DEST" /usr/sbin/useradd -s /bin/true -m -d /var/lib/docker-home -p $(openssl passwd -1 "$TCI_SILA_DOCKER_PW") -g 101 -u 1999 docker
+    
+    ## copy the root filesystem
+    cp -r "$SRC/root/"* "$DEST"
+
+    ## create the lab-cinnector configuraten based on the used environment variables
+    envsubst < "$DEST/etc/lab-connector.conf.in" > "$DEST/etc/lab-connector.conf"
+    rm "$DEST/etc/lab-connector.conf.in"
+
+    ## enable requiered services
+    enable_service "lab-connector" "default"
+    enable_service "node-exporter" "default"
+
+    ## fixed ssh key premissions
+    chown 1999:101 -R "$DEST/var/lib/docker-home/.ssh"
+    chmod 700 "$DEST/var/lib/docker-home/.ssh"
+    chmod 700 "$DEST/root/.ssh"
+
+    ## rename the user home folder
+    [ "$TCI_SILA_USER" != "user" ] && mv -T "$DEST/home/user/" "$DEST/home/$TCI_SILA_USER/"
+    
+    chown 1000:100 -R "$DEST/home/$TCI_SILA_USER/.ssh"
+    chmod 700 "$DEST/home/$TCI_SILA_USER/.ssh"
+
+}

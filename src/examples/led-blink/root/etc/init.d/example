@@ -1,0 +1,7 @@
+#!/sbin/openrc-run
+
+description="start one of the example scripts"
+command="/usr/bin/python /blink.py"
+command_background=true
+pidfile="/run/example.pid"
+

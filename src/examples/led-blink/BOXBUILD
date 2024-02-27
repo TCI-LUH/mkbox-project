@@ -1,0 +1,29 @@
+extend "$BOXES_BASE/linux-box/BOXBUILD"
+
+name="example-led-blink"
+inc_root_size 180M
+
+apks+=(
+    openssh
+    ca-certificates
+    shadow
+    vim
+    sudo
+    bash-completion
+    python3
+    libgpiod
+    py3-libgpiod
+)
+
+
+function root()
+{
+    chroot "$DEST" /usr/sbin/useradd -s /bin/bash -m -p $(openssl passwd -1 test) -G wheel test
+    
+    cp -r "$SRC/root/"* "$DEST"
+
+    enable_service "example" "default"
+
+    enable_service "sshd" "default"
+    enable_service "update-ca-certificates" "default"
+}

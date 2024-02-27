@@ -1,0 +1,14 @@
+extend "$BOXES_BASE/tci-sila-box/BOXBUILD"
+
+name="pccc-box"
+inc_root_size 80M
+
+apks+=(
+    cifs-utils
+)
+
+function root()
+{
+    cp -r "$SRC/root/"* "$DEST"
+    enable_service "mount-fstab" "default"  
+} 

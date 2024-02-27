@@ -1,0 +1,8 @@
+Cmnd_Alias MKBOX = /opt/mkbox/mkbox, /usr/bin/mkbox
+Defaults!MKBOX env_keep+=BOARD
+Defaults!MKBOX env_keep+=BOXES_BASE
+Defaults!MKBOX env_keep+=BOARDS_BASE
+Defaults!MKBOX env_keep+=BOX_BRANCH
+Defaults!MKBOX env_keep+=BOX_VERSION
+Defaults!MKBOX env_keep+=SKIP_FLASHING
+%mkbox ALL= NOPASSWD:SETENV: MKBOX

@@ -1,0 +1,198 @@
+diff --git a/Makefile b/Makefile
+index 730e8d7..89f780d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -246,8 +246,6 @@ ifeq ($(HOSTARCH),$(ARCH))
+ CROSS_COMPILE ?=
+ endif
+ 
+-export CROSS_COMPILE=aarch64-none-elf-
+-
+ KCONFIG_CONFIG	?= .config
+ export KCONFIG_CONFIG
+ 
+diff --git a/arch/arm/cpu/armv8/axg/firmware/scp_task/Makefile b/arch/arm/cpu/armv8/axg/firmware/scp_task/Makefile
+index 2e1eee8..e8e2e7a 100644
+--- a/arch/arm/cpu/armv8/axg/firmware/scp_task/Makefile
++++ b/arch/arm/cpu/armv8/axg/firmware/scp_task/Makefile
+@@ -6,7 +6,7 @@ include $(buildtree)/include/autoconf.mk
+ include $(buildtree)/.config
+ 
+ # Select ARMv7-m bare-metal toolchain
+-CROSS_COMPILE=arm-none-eabi-
++CROSS_COMPILE=$(CROSS_COMPILE_ARM)
+ ASM=$(CROSS_COMPILE)as
+ CC=$(CROSS_COMPILE)gcc
+ CPP=$(CROSS_COMPILE)cpp
+diff --git a/arch/arm/cpu/armv8/g12a/firmware/scp_task/Makefile b/arch/arm/cpu/armv8/g12a/firmware/scp_task/Makefile
+index 82f31b8..dec2f38 100644
+--- a/arch/arm/cpu/armv8/g12a/firmware/scp_task/Makefile
++++ b/arch/arm/cpu/armv8/g12a/firmware/scp_task/Makefile
+@@ -6,7 +6,7 @@ include $(buildtree)/include/autoconf.mk
+ include $(buildtree)/.config
+ 
+ # Select ARMv7-m bare-metal toolchain
+-CROSS_COMPILE=arm-none-eabi-
++CROSS_COMPILE=$(CROSS_COMPILE_ARM)
+ ASM=$(CROSS_COMPILE)as
+ CC=$(CROSS_COMPILE)gcc
+ CPP=$(CROSS_COMPILE)cpp
+diff --git a/arch/arm/cpu/armv8/g12b/firmware/scp_task/Makefile b/arch/arm/cpu/armv8/g12b/firmware/scp_task/Makefile
+index 82f31b8..dec2f38 100644
+--- a/arch/arm/cpu/armv8/g12b/firmware/scp_task/Makefile
++++ b/arch/arm/cpu/armv8/g12b/firmware/scp_task/Makefile
+@@ -6,7 +6,7 @@ include $(buildtree)/include/autoconf.mk
+ include $(buildtree)/.config
+ 
+ # Select ARMv7-m bare-metal toolchain
+-CROSS_COMPILE=arm-none-eabi-
++CROSS_COMPILE=$(CROSS_COMPILE_ARM)
+ ASM=$(CROSS_COMPILE)as
+ CC=$(CROSS_COMPILE)gcc
+ CPP=$(CROSS_COMPILE)cpp
+diff --git a/arch/arm/cpu/armv8/gxb/firmware/scp_task/Makefile b/arch/arm/cpu/armv8/gxb/firmware/scp_task/Makefile
+index 2e1eee8..e8e2e7a 100644
+--- a/arch/arm/cpu/armv8/gxb/firmware/scp_task/Makefile
++++ b/arch/arm/cpu/armv8/gxb/firmware/scp_task/Makefile
+@@ -6,7 +6,7 @@ include $(buildtree)/include/autoconf.mk
+ include $(buildtree)/.config
+ 
+ # Select ARMv7-m bare-metal toolchain
+-CROSS_COMPILE=arm-none-eabi-
++CROSS_COMPILE=$(CROSS_COMPILE_ARM)
+ ASM=$(CROSS_COMPILE)as
+ CC=$(CROSS_COMPILE)gcc
+ CPP=$(CROSS_COMPILE)cpp
+diff --git a/arch/arm/cpu/armv8/gxl/firmware/scp_task/Makefile b/arch/arm/cpu/armv8/gxl/firmware/scp_task/Makefile
+index 2e1eee8..e8e2e7a 100644
+--- a/arch/arm/cpu/armv8/gxl/firmware/scp_task/Makefile
++++ b/arch/arm/cpu/armv8/gxl/firmware/scp_task/Makefile
+@@ -6,7 +6,7 @@ include $(buildtree)/include/autoconf.mk
+ include $(buildtree)/.config
+ 
+ # Select ARMv7-m bare-metal toolchain
+-CROSS_COMPILE=arm-none-eabi-
++CROSS_COMPILE=$(CROSS_COMPILE_ARM)
+ ASM=$(CROSS_COMPILE)as
+ CC=$(CROSS_COMPILE)gcc
+ CPP=$(CROSS_COMPILE)cpp
+diff --git a/arch/arm/cpu/armv8/gxtvbb/firmware/scp_task/Makefile b/arch/arm/cpu/armv8/gxtvbb/firmware/scp_task/Makefile
+index 2e1eee8..e8e2e7a 100644
+--- a/arch/arm/cpu/armv8/gxtvbb/firmware/scp_task/Makefile
++++ b/arch/arm/cpu/armv8/gxtvbb/firmware/scp_task/Makefile
+@@ -6,7 +6,7 @@ include $(buildtree)/include/autoconf.mk
+ include $(buildtree)/.config
+ 
+ # Select ARMv7-m bare-metal toolchain
+-CROSS_COMPILE=arm-none-eabi-
++CROSS_COMPILE=$(CROSS_COMPILE_ARM)
+ ASM=$(CROSS_COMPILE)as
+ CC=$(CROSS_COMPILE)gcc
+ CPP=$(CROSS_COMPILE)cpp
+diff --git a/arch/arm/cpu/armv8/tl1/firmware/scp_task/Makefile b/arch/arm/cpu/armv8/tl1/firmware/scp_task/Makefile
+index b108bf2..30cad29 100644
+--- a/arch/arm/cpu/armv8/tl1/firmware/scp_task/Makefile
++++ b/arch/arm/cpu/armv8/tl1/firmware/scp_task/Makefile
+@@ -6,7 +6,7 @@ include $(buildtree)/include/autoconf.mk
+ include $(buildtree)/.config
+ 
+ # Select ARMv7-m bare-metal toolchain
+-CROSS_COMPILE=arm-none-eabi-
++CROSS_COMPILE=$(CROSS_COMPILE_ARM)
+ ASM=$(CROSS_COMPILE)as
+ CC=$(CROSS_COMPILE)gcc
+ CPP=$(CROSS_COMPILE)cpp
+diff --git a/arch/arm/cpu/armv8/txhd/firmware/scp_task/Makefile b/arch/arm/cpu/armv8/txhd/firmware/scp_task/Makefile
+index 2e1eee8..e8e2e7a 100644
+--- a/arch/arm/cpu/armv8/txhd/firmware/scp_task/Makefile
++++ b/arch/arm/cpu/armv8/txhd/firmware/scp_task/Makefile
+@@ -6,7 +6,7 @@ include $(buildtree)/include/autoconf.mk
+ include $(buildtree)/.config
+ 
+ # Select ARMv7-m bare-metal toolchain
+-CROSS_COMPILE=arm-none-eabi-
++CROSS_COMPILE=$(CROSS_COMPILE_ARM)
+ ASM=$(CROSS_COMPILE)as
+ CC=$(CROSS_COMPILE)gcc
+ CPP=$(CROSS_COMPILE)cpp
+diff --git a/arch/arm/cpu/armv8/txl/firmware/scp_task/Makefile b/arch/arm/cpu/armv8/txl/firmware/scp_task/Makefile
+index 2e1eee8..e8e2e7a 100644
+--- a/arch/arm/cpu/armv8/txl/firmware/scp_task/Makefile
++++ b/arch/arm/cpu/armv8/txl/firmware/scp_task/Makefile
+@@ -6,7 +6,7 @@ include $(buildtree)/include/autoconf.mk
+ include $(buildtree)/.config
+ 
+ # Select ARMv7-m bare-metal toolchain
+-CROSS_COMPILE=arm-none-eabi-
++CROSS_COMPILE=$(CROSS_COMPILE_ARM)
+ ASM=$(CROSS_COMPILE)as
+ CC=$(CROSS_COMPILE)gcc
+ CPP=$(CROSS_COMPILE)cpp
+diff --git a/arch/arm/cpu/armv8/txlx/firmware/scp_task/Makefile b/arch/arm/cpu/armv8/txlx/firmware/scp_task/Makefile
+index 2e1eee8..e8e2e7a 100644
+--- a/arch/arm/cpu/armv8/txlx/firmware/scp_task/Makefile
++++ b/arch/arm/cpu/armv8/txlx/firmware/scp_task/Makefile
+@@ -6,7 +6,7 @@ include $(buildtree)/include/autoconf.mk
+ include $(buildtree)/.config
+ 
+ # Select ARMv7-m bare-metal toolchain
+-CROSS_COMPILE=arm-none-eabi-
++CROSS_COMPILE=$(CROSS_COMPILE_ARM)
+ ASM=$(CROSS_COMPILE)as
+ CC=$(CROSS_COMPILE)gcc
+ CPP=$(CROSS_COMPILE)cpp
+diff --git a/include/fdt.h b/include/fdt.h
+index 526aedb..8e8b846 100644
+--- a/include/fdt.h
++++ b/include/fdt.h
+@@ -1,5 +1,5 @@
+-#ifndef _FDT_H
+-#define _FDT_H
++#ifndef FDT_H
++#define FDT_H
+ /*
+  * libfdt - Flat Device Tree manipulation
+  * Copyright (C) 2006 David Gibson, IBM Corporation.
+diff --git a/include/libfdt.h b/include/libfdt.h
+index 0ef7d94..49adf42 100644
+--- a/include/libfdt.h
++++ b/include/libfdt.h
+@@ -1,5 +1,5 @@
+-#ifndef _LIBFDT_H
+-#define _LIBFDT_H
++#ifndef LIBFDT_H
++#define LIBFDT_H
+ /*
+  * libfdt - Flat Device Tree manipulation
+  * Copyright (C) 2006 David Gibson, IBM Corporation.
+diff --git a/include/libfdt_env.h b/include/libfdt_env.h
+index 226a351..eb3b545 100644
+--- a/include/libfdt_env.h
++++ b/include/libfdt_env.h
+@@ -6,8 +6,8 @@
+  * SPDX-License-Identifier:	LGPL-2.1+
+  */
+ 
+-#ifndef _LIBFDT_ENV_H
+-#define _LIBFDT_ENV_H
++#ifndef LIBFDT_ENV_H
++#define LIBFDT_ENV_H
+ 
+ #include "compiler.h"
+ #include "linux/types.h"
+diff --git a/tools/Makefile b/tools/Makefile
+index b6d5af2..6196c27 100644
+--- a/tools/Makefile
++++ b/tools/Makefile
+@@ -199,7 +199,10 @@ endif # !LOGO_BMP
+ # Define __KERNEL_STRICT_NAMES to prevent typedef overlaps
+ # Define _GNU_SOURCE to obtain the getline prototype from stdio.h
+ #
+-HOST_EXTRACFLAGS += -include $(srctree)/include/libfdt_env.h \
++HOST_EXTRACFLAGS += \
++		-include $(srctree)/include/libfdt_env.h \
++		-include $(srctree)/include/fdt.h \
++		-include $(srctree)/include/libfdt.h \
+ 		$(patsubst -I%,-idirafter%, $(filter -I%, $(UBOOTINCLUDE))) \
+ 		-I$(srctree)/lib/libfdt \
+ 		-I$(srctree)/tools \

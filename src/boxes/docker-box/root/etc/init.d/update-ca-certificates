@@ -1,0 +1,9 @@
+#!/sbin/openrc-run
+
+description="update-ca-certificates"
+
+
+start() {
+	update-ca-certificates &> /dev/null
+	eend 0
+}

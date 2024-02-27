@@ -1,0 +1,7 @@
+/*.img
+/*.img.buildID
+/*.img.sha*
+/*.img.zst
+/src
+/pkg
+/*.pkg.tar.*

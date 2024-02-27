@@ -1,0 +1,14 @@
+[Unit]
+Description=mkbox - update server
+After=network.target
+
+[Service]
+User=http
+WorkingDirectory=/opt/mkbox
+ExecStart=/opt/mkbox/update-server
+Environment="IMAGE_PATH=/srv/boxes/images"
+Environment="HOST=0.0.0.0"
+Environment="PORT=5555"
+
+[Install]
+WantedBy=multi-user.target

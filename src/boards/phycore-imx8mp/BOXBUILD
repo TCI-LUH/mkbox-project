@@ -1,0 +1,15 @@
+name="phycore-imx8mp"
+root_size=160M
+
+arch=aarch64
+first_sector=17384
+boot_size=128M
+external_storage_dev="/dev/mmcblk1"
+storage_dev="/dev/mmcblk2"
+APK_BRANCH="edge"
+
+function flush()
+{
+    dd if="$SRC/flash.bin" of="$DEV" conv=fsync,notrunc bs=1K seek=32
+    mkimage -A arm -O linux -T script -C none -n "U-Boot boot script" -d "$SRC/../config/boot.sh" "$SRC/../config/boot.scr"
+}

@@ -1,0 +1,325 @@
+#!/bin/bash
+set -e
+shopt -s extglob
+
+## checks for the correct usage
+[ -z "$1" -o ! -f "$1" ] && echo "usage: $(basename "$0") <BOXBUILD file>" && exit -1
+
+## checks for root privilages
+if [ "$EUID" -ne 0 ] ;then 
+    echo "Please run as root"
+    exit
+fi
+
+## debug function for testing: print the caller before executing a command
+function debug()
+{
+    echo "DEBUG: $(caller)"
+    "$@"
+} 1>&2 
+
+## setup the environment variabels
+SRC="$(realpath $(dirname $1))"
+SCRIPT_FILE="$(readlink -nf $0)" || SCRIPT_FILE="$0"
+BASE="$(realpath $(dirname "$SCRIPT_FILE"))"
+export BOXES_BASE="${BOXES_BASE:-$BASE/../boxes}"
+export BOARDS_BASE="${BOARDS_BASE:-$BASE/../boards}"
+export APK_BRANCH="${APK_BRANCH:-edge}"
+
+[ -z "$BOARD" ] && echo "env 'BOARD' is not set" && exit -1
+export BOARD
+
+[ -n "$SUDO_USER" ] && userID="$SUDO_USER" || userID="$USER"
+
+## load and expord all variabels from a script file
+function load()
+{
+    set -a
+    source "$1"
+    set +a
+}
+
+function inc_root_size()
+{
+    local a="$(echo "$root_size" | numfmt --from iec)"
+    local b="$(echo "$1" | numfmt --from iec)"
+    export root_size=$(($a+$b))
+}
+export -f inc_root_size
+
+## a helper function to extend a function, first parameter the function name, 
+## this function print the extended function version to stdout 
+function extend_function()
+{
+    [ -z "$EXT_BOXBUILD" ] && exit 1
+    local name="$1"
+
+    local func=$(declare -f "$name")
+    [ -z "$func" ] && func="function $name() { :; }"
+
+    local base_func=$(declare -f "base_$name")
+    [ -z "$base_func" ] && base_func="function base_$name() { :; }"
+
+    cat<<EOF
+        function $name() { :; }
+        function base_$name()
+        (
+            $base_func
+            $func
+            base_$name
+            SRC="$(realpath $(dirname $EXT_BOXBUILD))" $name
+        )
+EOF
+}
+
+
+## load and extend the needed functions from a child BOXBUILD file
+function extend()
+{
+    local EXT_BOXBUILD="$(cd "$SRC" && realpath "$1")"
+    [ -z "$1" -o ! -f "$EXT_BOXBUILD" ] && echo "BOXBUILD usage: extend <BOXBUILD file>" && ( file "$EXT_BOXBUILD" || true ) && exit -1
+
+    SRC="$(realpath $(dirname $EXT_BOXBUILD))" load "$EXT_BOXBUILD"
+    source <(extend_function "build")
+    source <(extend_function "root")
+    source <(extend_function "initramfs")
+
+    export -f "base_build"
+    export -f "base_root"
+    export -f "base_initramfs"
+}
+export -f extend
+
+## some default function declarations 
+function base_build() { :; }
+function build() { :; }
+function base_root() { :; }
+function root() { :; }
+function base_initramfs() { :; }
+function initramfs() { :; }
+
+## load the main BOXBUILD description
+load "$1"
+
+## overwrite some settings if the user has specified them
+domain="${BOX_DOMAIN:-$domain}"
+update_server_http="${BOX_UPDATE_SERVER_HTTP:-$update_server_http}"
+
+## load some default environments
+use_force_update_dns="${use_force_update_dns:-true}"
+use_force_update_config="${use_force_update_config:-true}"
+
+## check some required environment variables
+export ARCH="$arch"
+[ -z "$arch" ] && echo "arch is not defined, maybe forget to extend the board BOXBUILD?" && exit -1
+[ -z "$first_sector" ] && echo "first_sector is not defined, maybe forget to extend the board BOXBUILD?" && exit -1
+[ -z "$boot_size" ] && echo "boot_size is not defined, maybe forget to extend the board BOXBUILD?" && exit -1
+[ -z "$root_size" ] && echo "root_size is not defined in BOXBUILD" && exit -1
+
+
+export imgsize_bytes=$(( $(numfmt --from iec "$boot_size") + $(numfmt --from iec "$root_size") + $first_sector * 512 ))
+export imgsize="$(numfmt --to-unit Mi "$imgsize_bytes")M" ## the disc utilities are using M units as Mi units
+
+echo imgsize_bytes $imgsize_bytes
+echo imgsize $imgsize
+# exit 1
+
+## define the output file name and the buildID
+[ -z "$name" ] && name="box-linux"
+image_name="$name-${BOARD}${BOX_BRANCH:+-$BOX_BRANCH}${BOX_VERSION:+-$BOX_VERSION}.img"
+buildID="$(openssl rand -hex 32)"
+
+## a helper function for the apk manager
+function apk()
+{
+    [ -z "$ROOT" ] && echo "env 'ROOT' is not set" && exit -1
+
+    local qemu="$(which "qemu-${ARCH%v[0-9]}-static")"
+    mkdir -p "$ROOT/$(dirname "$qemu")"
+    cp "$qemu" "$ROOT/$qemu"
+
+    "$BASE/apk/sbin/apk.static" --arch "$ARCH" \
+        -X "http://dl-cdn.alpinelinux.org/alpine/${APK_BRANCH}/main/" \
+        -X "http://dl-cdn.alpinelinux.org/alpine/${APK_BRANCH}/community/" \
+        -X "http://dl-3.alpinelinux.org/alpine/edge/testing/" \
+        -U --allow-untrusted --no-cache --root "$ROOT" --initdb add "$@"
+
+    # rm "$ROOT/$qemu"
+}
+export -f apk
+
+function run()
+{
+    chroot "$DEST" /bin/sh -l -c "$*"
+}
+
+## execute the build functions
+function mkbuild()
+{
+    export -f "base_build"
+    export -f "build"
+    su --preserve-environment "$userID"  /bin/bash -c "base_build"
+    su --preserve-environment "$userID"  /bin/bash -c "build"
+}
+
+## create the initramfs and prepare the boot process
+function mkboot()
+(
+    function cleanup {
+        [ -n "$initramfs_zip" ] && rm "$initramfs_zip"
+        [ -n "$initramfs_root" ] && rm -r "$initramfs_root"
+    }
+    trap cleanup EXIT
+
+    initramfs_root="$(mktemp -d /tmp/initramfs-root-XXXXXX)"
+
+    ROOT="$initramfs_root" apk "${initramfs_apks[@]}"
+    DEST="$initramfs_root" base_initramfs
+    DEST="$initramfs_root" initramfs
+
+    sed '/^$/d' > "$initramfs_root/board.conf" << EOF
+imgname="${name}"
+arch=${arch}
+board="${BOARD}"
+buildID=${buildID}
+external_storage_dev=${external_storage_dev}
+storage_dev=${storage_dev}
+first_sector=${first_sector}
+boot_size=${boot_size}
+min_root_size=${min_root_size}
+update_server_http="${update_server_http}"
+max_copy_block_count=${imgsize}
+copy_block_size=1M
+use_force_update_dns="${use_force_update_dns}"
+use_force_update_config="${use_force_update_config}"
+${domain:+domain=$domain}
+${BOX_BRANCH:+box_branch=$BOX_BRANCH}
+${BOX_VERSION:+box_version=$BOX_VERSION}
+EOF
+
+    initramfs_zip="$(mktemp /tmp/initramfs-XXXXXX)"
+    cd "$initramfs_root"
+    find . | cpio -H newc -o | gzip -9 > "$initramfs_zip"
+    cd "$BASE"
+
+    mkimage -n initramfs -A arm -O linux -T ramdisk -C none -d "$initramfs_zip"  "$DEST/initramfs"
+
+    cp -r "$BOARDS_BASE/$BOARD/config/"* "$DEST"
+    cp -r "$BOARDS_BASE/$BOARD/output/boot/"* "$DEST"
+)
+
+## install the root file system and all provided packages
+function mkroot()
+(
+    ROOT="$DEST" apk "${apks[@]}"
+    cp -r "$BOARDS_BASE/$BOARD/output/modules/"* "$DEST"
+    base_root
+    root
+
+    mkdir -p "$DEST/etc/profile.d/"
+    sed '/^$/d' > "$DEST/etc/profile.d/box.sh" << EOF
+export BOX_IMAGENAME="${name}"
+export BOX_ARCH=${arch}
+export BOX_BOARD="${BOARD}"
+${domain:+export BOX_DOMAIN=$domain}
+${BOX_BRANCH:+export BOX_BRANCH=$BOX_BRANCH}
+${BOX_VERSION:+export BOX_VERSION=$BOX_VERSION}
+EOF
+)
+
+
+## utility function to enable an open-rc service, first arg: service name, second arg: runlevel
+function enable_service()
+{
+    [ -z "$1" -o -z "$2" ] && echo "BOXBUILD usage: enable_service <service name> <runlevel>"
+    mkdir -p "$DEST/etc/runlevels/$2/"
+    ln -sf "/etc/init.d/$1" "$DEST/etc/runlevels/$2/"
+}
+export -f enable_service
+
+## utility function to enable an open-rc service, first arg: service name, second arg: runlevel
+function disable_service()
+{
+    [ -z "$1" -o -z "$2" ] && echo "BOXBUILD usage: disable_service <service name> <runlevel>"
+    rm -f "$DEST/etc/runlevels/$2/$1"
+}
+export -f disable_service
+
+## clean up the image build process
+function cleanup()
+{
+    sync
+    mountpoint -q "$mount_dir"/boot && umount "$mount_dir"/boot
+    mountpoint -q "$mount_dir" && umount "$mount_dir"
+    [ -n "$loop" ] && losetup -d "$loop"
+    [ -n "$mount_dir" ] && rm -r "$mount_dir"
+}
+trap cleanup EXIT
+
+## checks for current loop usages
+used_loop=$(losetup -a | grep  "($(realpath $image_name))") \
+    && echo "$image_name is currently mounted or used by a loop dev!" && exit -1
+
+losetup -a | grep -s "($(realpath $image_name))" && echo "$image_name is currently mounted or used by a loop dev" && exit -1
+
+## start the build process
+mkbuild
+
+## prepare the image file
+rm -rf "$image_name"
+truncate -s "$imgsize" "$image_name"
+
+## formart the image file
+sfdisk -q "$image_name" << EOF
+start=$first_sector, size=$boot_size, type=83
+start=$(($first_sector+ $(numfmt --from iec $boot_size) / 512)), type=83
+EOF
+
+## create a loop device
+loop=$(losetup -f)
+losetup -P "$loop" "$image_name"
+
+## flush the boodloader
+DEV="$loop" SRC="$BOARDS_BASE/$BOARD/output" flush
+
+## create the filesystems
+mkfs.fat -F 32 "${loop}p1"
+mkfs.ext4 "${loop}p2"
+
+mount_dir="$(mktemp -d /tmp/mount-XXXXXX)"
+
+## mount the image
+mount "${loop}p2" "$mount_dir"
+mkdir "$mount_dir"/boot
+mount "${loop}p1" "$mount_dir"/boot
+
+## install the boot and root filesystem 
+DEST="$mount_dir/boot" mkboot
+DEST="$mount_dir" mkroot
+find "$mount_dir" -name ".gitkeep" -delete
+
+df -h "$mount_dir" "$mount_dir/boot"
+
+## cleanup
+cleanup
+trap "" EXIT
+
+## create a compressed image, the buildID file and a checksum of the images
+echo -e "$buildID  $image_name" > "$image_name.buildID"
+zstd -fkvT0 "$image_name"
+sha256sum "$image_name"*(.zst) > "$image_name.sha256"
+
+## fix the file permissions
+[ -n "$SUDO_UID" ] && chown "$SUDO_UID:$SUDO_GID" "$image_name"*
+du -sh "$image_name"
+
+[ -n "$SKIP_FLASHING" ] && echo "skip flashing $SKIP_FLASHING" && exit
+if [[ -n "$AUTO_FLUSH_DEV_ID" && -b "/dev/disk/by-id/$AUTO_FLUSH_DEV_ID" ]]; then
+    read -e -n 1 -p "flush to dev: $AUTO_FLUSH_DEV_ID? [Y/n]" f
+    [ "$f" == "" -o "$f" == "y" -o "$f" == "Y" ] && echo flushing... && dd if="$image_name" of="/dev/disk/by-id/$AUTO_FLUSH_DEV_ID" bs=16k status=progress && sync
+    echo "done"
+else
+    echo
+    echo "now you can flash the image $image_name to your storage device"
+    echo "for example with, make sure you replace /dev/sdX with your correct device: dd if='$image_name' of='/dev/sdX' bs=16k status=progress && sync"
+fi

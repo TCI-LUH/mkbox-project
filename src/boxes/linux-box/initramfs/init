@@ -1,0 +1,152 @@
+#!/bin/sh
+
+mkfifo init.fifo
+tee -a init.log < init.fifo &
+TEE_PID=$!
+
+{
+    set -a
+    . /board.conf
+    set +a
+
+    rescue_shell() {
+        echo "Something went wrong. Dropping to a shell."
+        sh &>/dev/console
+    }
+
+    echo "start init..."
+
+    mount -t proc none /proc
+    mount -t devtmpfs none /dev
+    mount -t sysfs none /sys
+
+    echo "wait for storage device: ${storage_dev}..."
+    timeout 5s sh -c "while [ ! -b '${storage_dev}' ] ; do sleep 0.1; done"
+    if [ $? -ne 0 ]; then
+        if [[ -n "$external_storage_dev" ]]; then
+            echo "WARNIMG: storage device: ${storage_dev} not found! using external_storage_dev: ${external_storage_dev} as fallback"
+            storage_dev="$external_storage_dev"
+            external_storage_dev=""
+            timeout 5s sh -c "while [ ! -b '${storage_dev}' ] ; do sleep 0.1; done" || rescue_shell
+        else
+            rescue_shell
+        fi
+    fi
+
+    sleep 1
+
+    if [[ -n "$external_storage_dev" && -b "${external_storage_dev}p1" ]]; then
+
+        multiplyer=1
+        [ "${max_copy_block_count: -1}" == "G" ] && multiplyer=1024
+        count_blocks=$((${max_copy_block_count%[MG]} * $multiplyer))
+        echo "clone external_storage_dev ($external_storage_dev) to storage_dev ($storage_dev, blocks of 1M: $count_blocks)"
+        dd if="$external_storage_dev" of="$storage_dev" bs=$copy_block_size count=$count_blocks
+    fi
+
+    update_over_http()
+    (
+        get_record_value()
+        {
+            local text="$1"
+            local name="$2"
+            echo "$text" | sed -rn 's/.*"'"$name"'=([^"]+)".*/\1/p'
+        }
+
+        get_update_force_name_config()
+        (
+            mount "${storage_dev}"p1 /update/boot
+
+            echo "check for config update overwrites: $(cat /update/boot/update.txt)" 1>&2
+
+            [ -f "/update/boot/update.txt" ] && cp /update/boot/update.txt /update && . /update/boot/update.txt
+            echo "${force_update_server_http}"
+            # echo "${force_update_name:+$force_update_name/$force_update_name-$board}${force_update_branch:+-$force_update_branch}${force_update_version:+-$force_update_version}"
+            # echo "name=$force_update_name&board=$board&=branch=$force_update_branch&version=$force_update_version"
+            echo "${force_update_name:+name=$force_update_name&board=$board}${force_update_branch:+&branch=$force_update_branch}${force_update_version:+&version=$force_update_version}"
+            umount /update/boot
+        )
+
+        get_update_force_name_dns()
+        (
+            local mac="$(cat /sys/class/net/eth0/address | sed 's/:/-/g')"
+            local lookupName="$mac.$domain"
+            local record="$(dig -t TXT +short "$lookupName")"
+            echo "check for dns update overwrites: $lookupName got: $record" 1>&2
+
+            local force_update_name="$(get_record_value "$record" "box_name")"
+            local force_update_branch="$(get_record_value "$record" "box_branch")"
+            local force_update_version="$(get_record_value "$record" "box_version")"
+            local force_update_server_http="$(get_record_value "$record" "box_update_server")"
+
+            echo "${force_update_server_http}"
+            # echo "${force_update_name:+$force_update_name/$force_update_name-$board}${force_update_branch:+-$force_update_branch}${force_update_version:+-$force_update_version}"
+            echo "${force_update_name:+name=$force_update_name&board=$board}${force_update_branch:+&branch=$force_update_branch}${force_update_version:+&version=$force_update_version}"
+        )
+
+        mkdir -p /update/boot
+        cd update
+
+        [ "$use_force_update_config" != "false" ] && update_force="$(get_update_force_name_config)"
+        [ -z "$update_force" ] && [ "$use_force_update_dns" != "false" ] && update_force="$(get_update_force_name_dns)"
+        # rescue_shell
+        force_update_server_http="$(echo "$update_force" | head -n 1)"
+        force_query="$(echo "$update_force" | tail -n 1)"
+
+        update_server_http="${force_update_server_http:-$update_server_http}"
+        [ -z "$update_server_http" ] && return 1 
+
+        # query="${force_query:-$imgname/$imgname-${board}${BOX_BRANCH:+-$BOX_BRANCH}${BOX_VERSION:+-$BOX_VERSION}}"
+        query="${force_query:-name=$imgname&board=$board&=branch=$BOX_BRANCH&version=$BOX_VERSION}"
+        echo "check for updates over $update_server_http/update?$query&build_id=$buildID"
+        ( set -o pipefail; curl "$update_server_http/update?$query&build_id=$buildID" | tar -mxvf - ) || return 1
+        grep ".img.zst" *.img.sha256 | sha256sum -c || return 1
+        echo "updating..."
+        (set -o pipefail; zstdcat -dT0 *.img.zst | dd of="${storage_dev}" bs=16M) && sync && echo "flush compleated" 
+
+        ## keep the update configuration
+        if [ -f "/update/update.txt" ]; then
+            mount "${storage_dev}"p1 /update/boot 
+            cp "/update/update.txt" "/update/boot/update.txt"
+            sync
+            umount /update/boot
+        fi
+    )
+
+    ip link set eth0 up
+    udhcpc -i eth0 -n -t 3 -T 3 && { update_over_http && rebooting="true" || echo "up to date"; }
+
+    if [ -n "$rebooting" ]; then
+        echo "reboot: $rebooting"
+        exec sh -c reboot
+    fi
+
+    if sfdisk -F "${storage_dev}" | tail -n +6 | grep -Evq "^\s+[0-9]+\s+$(($first_sector-1))"; then 
+        echo resize disk...
+        echo ",+" | sfdisk -N 2 "${storage_dev}" 
+        resize2fs "${storage_dev}"p2
+    fi
+
+    mount -t ext4 "${storage_dev}"p2 /newroot/
+    mount "${storage_dev}"p1 /newroot/boot
+    mount -t proc none /newroot/proc
+    mount -t sysfs none /newroot/sys
+    mount -t devtmpfs none /newroot/dev
+
+    for file in /init.d/*; do
+        [ -x "$file" ] && echo "execute: $file" && "$file"
+    done
+
+    # Clean up.
+    umount /proc
+    umount /dev
+    umount /sys
+
+    echo "init done"
+} > init.fifo 2>&1
+sync
+kill $TEE_PID
+cp init.log /newroot/boot
+
+# Boot the real thing.
+exec switch_root /newroot /sbin/init

@@ -1,0 +1,12 @@
+#!/sbin/openrc-run
+
+description="register this box in a smartLAB"
+command="/bin/lab-connector.sh"
+#command_user="tci"
+command_background=true
+pidfile="/run/lab-connector.pid"
+
+depend() {
+	need net
+}
+

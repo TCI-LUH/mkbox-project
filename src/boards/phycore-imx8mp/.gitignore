@@ -1,0 +1,11 @@
+config/boot.scr
+/*.img
+/*.img.*
+/linux
+/imx-atf
+/output
+/toolchains
+/u-boot
+/src
+/pkg
+/*.pkg.tar.*

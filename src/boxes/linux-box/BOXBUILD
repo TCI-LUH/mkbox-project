@@ -1,0 +1,61 @@
+extend "$BOARDS_BASE/$BOARD/BOXBUILD"
+
+name="linux-box"
+inc_root_size 32M
+domain="example.local"
+update_server_http="https://update.example.local:5555"
+
+initramfs_apks+=(
+    bash
+    busybox
+    sfdisk
+    e2fsprogs-extra
+    netcat-openbsd
+    zstd
+    tar
+    openssh-client-default
+    ca-certificates
+    openssl
+    curl
+    bind-tools
+)
+
+apks+=(
+    alpine-baselayout
+    bash
+    busybox
+    openrc
+    tzdata
+    htop
+)
+
+
+function initramfs()
+{
+    cp -r "$SRC/initramfs/"* "$DEST"
+}
+
+function root()
+{
+    cp -r "$SRC/root/"* "$DEST"
+
+    enable_service "bootmisc" "boot"
+    enable_service "hostname" "boot"
+    enable_service "hwclock" "boot"
+    enable_service "modules" "boot"
+    enable_service "sysctl" "boot"
+    enable_service "syslog" "boot"
+    
+    enable_service "networking" "default"
+    enable_service "ntpd" "default"
+
+    enable_service "killprocs" "shutdown"
+    enable_service "mount-ro" "shutdown"
+    enable_service "savecache" "shutdown"
+
+    enable_service "devfs" "sysinit"
+    enable_service "dmesg" "sysinit"
+    enable_service "hwdrivers" "sysinit"
+    enable_service "mdev" "sysinit"
+    enable_service "modloop" "sysinit"
+}

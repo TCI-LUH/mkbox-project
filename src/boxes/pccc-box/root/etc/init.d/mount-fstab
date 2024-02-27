@@ -1,0 +1,12 @@
+#!/sbin/openrc-run
+
+description="mount all fstab entries"
+
+depend() {
+	need net
+}
+
+start() {
+	mount -a
+	eend $?
+}

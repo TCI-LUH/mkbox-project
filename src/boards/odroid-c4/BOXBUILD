@@ -1,0 +1,13 @@
+name="odroid-c4"
+root_size=90M
+
+arch=aarch64
+first_sector=2048
+boot_size=128M
+external_storage_dev=""
+storage_dev="/dev/mmcblk0"
+
+function flush()
+{
+    dd if="$SRC/u-boot.bin" of="$DEV" conv=fsync,notrunc bs=512 seek=1
+}

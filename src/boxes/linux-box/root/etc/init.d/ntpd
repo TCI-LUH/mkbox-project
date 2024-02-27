@@ -1,0 +1,12 @@
+#!/sbin/openrc-run
+
+description="update the time"
+
+depend() {
+	need net
+}
+
+start() {
+	ntpd -d -q -n -p de.pool.ntp.org
+	eend $?
+}

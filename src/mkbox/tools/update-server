@@ -1,0 +1,101 @@
+#!/usr/bin/python3
+from cmath import log
+from ensurepip import version
+from bottle import route, run, response, request, HTTPResponse, ServerAdapter, hook, Bottle
+import os
+import glob
+import io
+import tarfile
+import threading
+import re
+
+image_path = os.environ.get("IMAGE_PATH","./")
+stop_after_update = os.environ.get("STOP_AFTER_REQUEST","false")
+
+@route("/list/<name>")
+def list(name):
+    return "\n".join([re.sub("\.img\.zst$", "", ele) for ele in glob.glob(f"**/*{name}*.img.zst", root_dir=image_path, recursive=True)])+"\n"
+
+@route("/list")
+def list_all():
+    return "\n".join([re.sub("\.img\.zst$", "", ele) for ele in glob.glob(f"**/*.img.zst", root_dir=image_path, recursive=True)])+"\n"
+
+@route("/update")
+def updateWithParams():
+    name = request.query.name
+    board = request.query.board
+    branch = request.query.branch
+    version = request.query.version
+    build_id = request.query.build_id
+
+    img_name =  '-'.join(filter(None, [name, board, branch, version]))
+    # return img_name+"\n"
+    
+    if branch:
+        return update(name, img_name, build_id)
+        
+    img_name =  '-'.join(filter(None, [name, board, "master", version]))
+    if os.path.isfile(os.path.join(image_path, name, f"{img_name}.img.zst")):
+        return update(name, img_name, build_id)
+
+    img_name =  '-'.join(filter(None, [name, board, "main", version]))
+    return update(name, img_name, build_id)
+
+@route("/update/<folder>/<name>/<build_id>")
+def update(folder, name, build_id):
+    img=os.path.join(image_path, folder, f"{name}.img.zst")
+    img_sha256=os.path.join(image_path, folder, f"{name}.img.sha256")
+    img_buildID=os.path.join(image_path, folder, f"{name}.img.buildID")
+
+    if not os.path.isfile(img):
+        print(f"not found: {img}")
+        return HTTPResponse(status=400)
+    if not os.path.isfile(img_buildID):
+        print(f"not found: {img_buildID}")
+        return HTTPResponse(status=400)
+    with open(img_buildID, 'r') as file:
+        new_build_id = file.read().split(" ")[0]
+
+
+    print(f"new_build_id: {new_build_id}\nbuild_id: {build_id}")
+    fh = io.BytesIO()
+    with tarfile.open(fileobj=fh, mode='w:tar') as tar:
+        if build_id != new_build_id:
+            tar.add(img, os.path.basename(img))
+            tar.add(img_sha256, os.path.basename(img_sha256))
+
+    print(f"update: {img}")
+    with open(img_sha256, 'r') as file:
+        print(file.read())
+
+    fh.seek(0)
+    response.headers['Content-Disposition'] = 'attachment; filename="update.tar"'
+    response.headers['Content-Length'] = fh.getbuffer().nbytes
+    response.headers['Content-Type'] = "application/x-tar"
+    
+    if stop_after_update != "false":
+        server.stop()
+    return fh.read()
+
+
+@route("/update/<folder>/<name>")
+def update_force(folder, name):
+    return update(folder, name, "")
+
+class MyWSGIRefServer(ServerAdapter):
+    server = None
+
+    def run(self, handler):
+        from wsgiref.simple_server import make_server, WSGIRequestHandler
+        if self.quiet:
+            class QuietHandler(WSGIRequestHandler):
+                def log_request(*args, **kw): pass
+            self.options['handler_class'] = QuietHandler
+        self.server = make_server(self.host, self.port, handler, **self.options)
+        self.server.serve_forever()
+
+    def stop(self):
+        threading.Thread(target= lambda: self.server.shutdown()).start()
+
+server = MyWSGIRefServer(port=os.environ.get("PORT", "8080"), host=os.environ.get("HOST", "127.0.0.1"))
+run(server=server)
